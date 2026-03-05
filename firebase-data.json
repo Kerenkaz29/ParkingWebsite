@@ -4,11 +4,13 @@
     "totalSpots": 10,
     "occupiedSpots": 6
   },
+  "orderCounter": 2,
   "orders": {
     "order001": {
       "firstName": "John",
       "lastName": "Smith",
       "email": "john.smith@example.com",
+      "carNumber": "12-345-67",
       "code": "4827",
       "orderedAt": "2026-03-05T10:30:00.000Z",
       "enteredAt": "2026-03-05T10:47:00.000Z"

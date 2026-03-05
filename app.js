@@ -1,20 +1,35 @@
 // =============================================
 // Firebase Configuration
 // =============================================
-// TODO: Replace with YOUR Firebase project config
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT.firebaseapp.com",
-    databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
-    projectId: "YOUR_PROJECT",
-    storageBucket: "YOUR_PROJECT.appspot.com",
-    messagingSenderId: "000000000000",
-    appId: "YOUR_APP_ID"
+    apiKey: "AIzaSyDjv1iwEcdqv4w6mQgZQ6r5SgO-hiiSgL8",
+    authDomain: "smartparkingbar.firebaseapp.com",
+    databaseURL: "https://smartparkingbar-default-rtdb.firebaseio.com",
+    projectId: "smartparkingbar",
+    storageBucket: "smartparkingbar.firebasestorage.app",
+    messagingSenderId: "1090333673423",
+    appId: "1:1090333673423:web:fb6298832910e35aceb4ba",
+    measurementId: "G-G2984SM7TJ"
 };
 
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
+
+// =============================================
+// Real-time listener: sync occupiedSpots with order count
+// =============================================
+db.ref('orders').on('value', snapshot => {
+    const orders = snapshot.val();
+    const count = orders ? Object.keys(orders).length : 0;
+
+    db.ref('parking/occupiedSpots').set(count);
+
+    db.ref('parking/totalSpots').once('value').then(totalSnap => {
+        const total = totalSnap.val() || 0;
+        db.ref('parking/isFull').set(count >= total);
+    });
+});
 
 // =============================================
 // Screen Navigation
@@ -69,25 +84,66 @@ function submitOrder(event) {
     const firstname = document.getElementById('firstname').value.trim();
     const lastname = document.getElementById('lastname').value.trim();
     const email = document.getElementById('email').value.trim();
+    const carnumber = document.getElementById('carnumber').value.trim();
 
-    if (!firstname || !lastname || !email) return;
+    // Validation
+    if (!firstname) {
+        alert('Please enter your first name.');
+        return;
+    }
+    if (!/^[a-zA-Z\s]{2,}$/.test(firstname)) {
+        alert('First name must contain only letters (at least 2 characters).');
+        return;
+    }
+    if (!lastname) {
+        alert('Please enter your last name.');
+        return;
+    }
+    if (!/^[a-zA-Z\s]{2,}$/.test(lastname)) {
+        alert('Last name must contain only letters (at least 2 characters).');
+        return;
+    }
+    if (!email) {
+        alert('Please enter your email.');
+        return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        alert('Please enter a valid email address.');
+        return;
+    }
+    if (!carnumber) {
+        alert('Please enter your car number.');
+        return;
+    }
+    if (!/^[0-9\-]{5,10}$/.test(carnumber)) {
+        alert('Car number must contain only digits and dashes (5-10 characters).');
+        return;
+    }
 
     showLoading(true);
 
     // Generate random 4-digit code
     const code = String(Math.floor(1000 + Math.random() * 9000));
 
-    // Save order to Firebase
-    const orderData = {
-        firstName: firstname,
-        lastName: lastname,
-        email: email,
-        code: code,
-        orderedAt: new Date().toISOString(),
-        enteredAt: null
-    };
+    // Get next order ID from counter
+    db.ref('orderCounter').transaction(currentCount => {
+        return (currentCount || 1) + 1;
+    }).then(result => {
+        const orderId = 'order' + String(result.snapshot.val() - 1).padStart(3, '0');
 
-    db.ref('orders').push(orderData)
+        // Save order to Firebase with sequential ID
+        const orderData = {
+            firstName: firstname,
+            lastName: lastname,
+            email: email,
+            carNumber: carnumber,
+            code: code,
+            orderedAt: new Date().toISOString(),
+            enteredAt: null
+        };
+
+        return db.ref('orders/' + orderId).set(orderData);
+    })
         .then(() => {
             showLoading(false);
             document.getElementById('confirmation-code').textContent = code;
