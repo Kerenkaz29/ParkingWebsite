@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bar Parking</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <!-- Screen 1: Welcome -->
+    <div id="screen-welcome" class="screen active">
+        <div class="container">
+            <div class="logo-area">
+                <div class="car-icon">🅿️</div>
+                <h1>Bar Parking</h1>
+                <p class="subtitle">Smart & Easy Parking</p>
+            </div>
+            <button id="btn-order" class="btn-primary" onclick="checkParking()">
+                <span>Order Parking</span>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 18l6-6-6-6"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- Screen 2: Parking Full -->
+    <div id="screen-full" class="screen">
+        <div class="container">
+            <div class="status-icon error">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="15" y1="9" x2="9" y2="15"/>
+                    <line x1="9" y1="9" x2="15" y2="15"/>
+                </svg>
+            </div>
+            <h2>Parking is Full</h2>
+            <p class="message">Please try again later</p>
+            <button class="btn-secondary" onclick="goToWelcome()">Back to Home</button>
+        </div>
+    </div>
+
+    <!-- Screen 3: Order Form -->
+    <div id="screen-order" class="screen">
+        <div class="container">
+            <h2>Order Parking</h2>
+            <p class="form-subtitle">Please fill in your details</p>
+            <form id="order-form" onsubmit="submitOrder(event)">
+                <div class="form-group">
+                    <label for="firstname">First Name</label>
+                    <input type="text" id="firstname" placeholder="Enter your first name" required>
+                </div>
+                <div class="form-group">
+                    <label for="lastname">Last Name</label>
+                    <input type="text" id="lastname" placeholder="Enter your last name" required>
+                </div>
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" placeholder="example@email.com" required>
+                </div>
+                <button type="submit" class="btn-primary">
+                    <span>Confirm Order</span>
+                </button>
+            </form>
+            <button class="btn-back" onclick="goToWelcome()">← Back</button>
+        </div>
+    </div>
+
+    <!-- Screen 4: Confirmation Code -->
+    <div id="screen-code" class="screen">
+        <div class="container">
+            <div class="status-icon success">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                    <polyline points="22 4 12 14.01 9 11.01"/>
+                </svg>
+            </div>
+            <h2>Order Confirmed!</h2>
+            <p class="message">Your code is:</p>
+            <div id="confirmation-code" class="code-display">0000</div>
+            <p class="code-note">Save this code — you'll need it to enter the parking lot</p>
+            <button class="btn-primary" onclick="goToWelcome()">
+                <span>Back to Home</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading" class="loading-overlay">
+        <div class="spinner"></div>
+        <p>Checking availability...</p>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
