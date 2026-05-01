@@ -16,20 +16,10 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-// =============================================
-// Real-time listener: sync occupiedSpots with order count
-// =============================================
-db.ref('orders').on('value', snapshot => {
-    const orders = snapshot.val();
-    const count = orders ? Object.keys(orders).length : 0;
-
-    db.ref('parking/occupiedSpots').set(count);
-
-    db.ref('parking/totalSpots').once('value').then(totalSnap => {
-        const total = totalSnap.val() || 0;
-        db.ref('parking/isFull').set(count >= total);
-    });
-});
+// NOTE: parking status (occupiedSpots, freeSpots, isFull) is owned by the
+// Raspberry Pi. The Pi sees the physical lot via the camera and is the
+// single source of truth. The website only READS those values -- it must
+// never write to /parking, otherwise it will overwrite the Pi's data.
 
 // =============================================
 // Screen Navigation
@@ -62,7 +52,25 @@ function checkParking() {
             const data = snapshot.val();
             showLoading(false);
 
-            if (data && data.isFull) {
+            // Defensive check: if /parking has not been written yet, or
+            // the values look broken (e.g. the website used to overwrite
+            // them with garbage), fall back to freeSpots > 0.
+            if (!data) {
+                showScreen('screen-order');
+                return;
+            }
+
+            const freeSpots = typeof data.freeSpots === 'number' ? data.freeSpots : null;
+            const isFull = data.isFull === true;
+
+            // Prefer freeSpots when available -- it's the most direct value.
+            if (freeSpots !== null) {
+                if (freeSpots <= 0) {
+                    showScreen('screen-full');
+                } else {
+                    showScreen('screen-order');
+                }
+            } else if (isFull) {
                 showScreen('screen-full');
             } else {
                 showScreen('screen-order');
@@ -87,69 +95,34 @@ function submitOrder(event) {
     const carnumber = document.getElementById('carnumber').value.trim();
 
     // Validation
-    if (!firstname) {
-        alert('Please enter your first name.');
-        return;
-    }
-    if (!/^[a-zA-Z\s]{2,}$/.test(firstname)) {
-        alert('First name must contain only letters (at least 2 characters).');
-        return;
-    }
-    if (!lastname) {
-        alert('Please enter your last name.');
-        return;
-    }
-    if (!/^[a-zA-Z\s]{2,}$/.test(lastname)) {
-        alert('Last name must contain only letters (at least 2 characters).');
-        return;
-    }
-    if (!email) {
-        alert('Please enter your email.');
-        return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        alert('Please enter a valid email address.');
-        return;
-    }
-    if (!carnumber) {
-        alert('Please enter your car number.');
-        return;
-    }
-    if (!/^[0-9\-]{5,10}$/.test(carnumber)) {
-        alert('Car number must contain only digits and dashes (5-10 characters).');
-        return;
-    }
+    if (!firstname) { alert('Please enter your first name.'); return; }
+    if (!/^[a-zA-Z\s]{2,}$/.test(firstname)) { alert('First name must contain only letters (at least 2 characters).'); return; }
+    if (!lastname) { alert('Please enter your last name.'); return; }
+    if (!/^[a-zA-Z\s]{2,}$/.test(lastname)) { alert('Last name must contain only letters (at least 2 characters).'); return; }
+    if (!email) { alert('Please enter your email.'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { alert('Please enter a valid email address.'); return; }
+    if (!carnumber) { alert('Please enter your car number.'); return; }
+    if (!/^[0-9\-]{5,10}$/.test(carnumber)) { alert('Car number must contain only digits and dashes (5-10 characters).'); return; }
 
     showLoading(true);
 
-    // Generate random 4-digit code
     const code = String(Math.floor(1000 + Math.random() * 9000));
 
-    // Get next order ID from counter
-    db.ref('orderCounter').transaction(currentCount => {
-        return (currentCount || 1) + 1;
-    }).then(result => {
-        const orderId = 'order' + String(result.snapshot.val() - 1).padStart(3, '0');
+    const orderData = {
+        firstName: firstname,
+        lastName: lastname,
+        email: email,
+        carNumber: carnumber,
+        code: code,
+        orderedAt: new Date().toISOString(),
+        enteredAt: null
+    };
 
-        // Save order to Firebase with sequential ID
-        const orderData = {
-            firstName: firstname,
-            lastName: lastname,
-            email: email,
-            carNumber: carnumber,
-            code: code,
-            orderedAt: new Date().toISOString(),
-            enteredAt: null
-        };
-
-        return db.ref('orders/' + orderId).set(orderData);
-    })
+    db.ref('orders').push(orderData)
         .then(() => {
             showLoading(false);
             document.getElementById('confirmation-code').textContent = code;
             showScreen('screen-code');
-
-            // Reset form
             document.getElementById('order-form').reset();
         })
         .catch(error => {
