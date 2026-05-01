@@ -52,9 +52,8 @@ function checkParking() {
             const data = snapshot.val();
             showLoading(false);
 
-            // Defensive check: if /parking has not been written yet, or
-            // the values look broken (e.g. the website used to overwrite
-            // them with garbage), fall back to freeSpots > 0.
+            // Defensive check: if /parking has not been written yet,
+            // allow ordering (the Pi will populate it shortly).
             if (!data) {
                 showScreen('screen-order');
                 return;
@@ -118,16 +117,32 @@ function submitOrder(event) {
         enteredAt: null
     };
 
-    db.ref('orders').push(orderData)
-        .then(() => {
-            showLoading(false);
-            document.getElementById('confirmation-code').textContent = code;
-            showScreen('screen-code');
-            document.getElementById('order-form').reset();
-        })
-        .catch(error => {
-            console.error('Firebase write error:', error);
-            showLoading(false);
-            alert('Error saving order. Please try again.');
-        });
+    // Atomically increment orderCounter and use the new value as the
+    // order ID. transaction() guarantees that even if two users press
+    // "Confirm Order" at the same time, each gets a unique number.
+    db.ref('orderCounter').transaction(current => {
+        return (current || 0) + 1;
+    })
+    .then(result => {
+        if (!result.committed) {
+            throw new Error('Could not allocate order number');
+        }
+        const newNumber = result.snapshot.val();
+        const orderId = 'order' + String(newNumber).padStart(3, '0');
+
+        return db.ref('orders/' + orderId).set(orderData)
+            .then(() => orderId);
+    })
+    .then(orderId => {
+        showLoading(false);
+        document.getElementById('confirmation-code').textContent = code;
+        showScreen('screen-code');
+        document.getElementById('order-form').reset();
+        console.log('Order saved as:', orderId);
+    })
+    .catch(error => {
+        console.error('Firebase write error:', error);
+        showLoading(false);
+        alert('Error saving order. Please try again.');
+    });
 }
