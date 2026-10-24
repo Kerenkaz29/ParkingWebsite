@@ -26,7 +26,28 @@ const db = firebase.database();
 // it's treated as a no-show. This bounds /pendingReservations so it never
 // needs a separate cleanup job -- expired entries are pruned lazily the
 // next time the transaction below runs.
-const RESERVATION_TTL_MS = 20 * 60 * 1000; // 20 minutes
+const RESERVATION_TTL_MS = 2.5 * 60 * 1000; // 2.5 minutes -- matches how long the Pi keeps an unused order valid
+
+// The Pi rewrites /parking (including lastUpdated) every 5 seconds while
+// its camera loop is running. If lastUpdated is older than this, we treat
+// the Pi as offline and refuse orders -- its spot counts can't be trusted.
+const PI_OFFLINE_AFTER_MS = 30 * 1000;
+
+// Difference between Firebase's clock and this device's clock, so a user
+// whose phone/PC clock is wrong doesn't see the Pi as falsely offline.
+let serverTimeOffset = 0;
+db.ref('.info/serverTimeOffset').on('value', snap => {
+    serverTimeOffset = snap.val() || 0;
+});
+
+// True only if /parking exists and the Pi wrote to it recently.
+function isPiOnline(data) {
+    if (!data || !data.lastUpdated) return false;
+    const lastUpdatedMs = Date.parse(data.lastUpdated);
+    if (isNaN(lastUpdatedMs)) return false;
+    const now = Date.now() + serverTimeOffset;
+    return now - lastUpdatedMs <= PI_OFFLINE_AFTER_MS;
+}
 
 // =============================================
 // Screen Navigation
@@ -58,11 +79,11 @@ function checkParking() {
         .then(snapshot => {
             const data = snapshot.val();
 
-            // Defensive check: if /parking has not been written yet,
-            // allow ordering (the Pi will populate it shortly).
-            if (!data) {
+            // No recent update from the Pi (or no data at all) -- we can't
+            // know how full the lot is, so don't take orders.
+            if (!isPiOnline(data)) {
                 showLoading(false);
-                showScreen('screen-order');
+                showScreen('screen-offline');
                 return;
             }
 
@@ -133,20 +154,28 @@ function countActiveReservations(reservations) {
 // Prevents overselling when several people submit orders around the same
 // time. /pendingReservations is a small, website-owned map of
 // { reservationKey: expiresAtEpochMs }. Firebase's transaction() reads,
-// mutates, and writes this ONE node atomically (the server serializes
-// concurrent transactions on the same path), which is what actually closes
-// the race -- a live count query over /orders could not be made atomic
-// with the write that follows it.
+// mutates, and writes this ONE node atomically -- the server serializes
+// EVERY concurrent transaction on the same path, one at a time, no matter
+// how many clients call it simultaneously. That's what actually closes the
+// race -- a live count query over /orders could not be made atomic with
+// the write that follows it.
 //
-// Resolves 'ok' if a spot was reserved (or there was nothing to guard
-// against), or 'full' if capacity is used up.
+// Resolves 'ok' if a spot was reserved, 'full' if capacity is used up, or
+// 'offline' if the Pi hasn't updated /parking recently.
+//
+// This covers every race, not just small/specific ones: the check below is
+// the general inequality "occupied + already-reserved < total", evaluated
+// fresh on each of the server's serialized retries. So for ANY N people
+// submitting around the same time against ANY M real free spots, exactly
+// min(N, M) succeed and the rest get 'full' -- whether that's 3 racing for
+// 2, 50 racing for 1, or any other combination where ordered > free.
 function reserveSpotIfAvailable() {
     return db.ref('parking').once('value').then(snapshot => {
         const data = snapshot.val();
 
-        // No data yet from the Pi -- match today's defensive behavior and
-        // allow the order through.
-        if (!data) return 'ok';
+        // Checked again here, not just in checkParking(): the Pi may have
+        // gone down while the user was filling in the form.
+        if (!isPiOnline(data)) return 'offline';
 
         const totalSpots = typeof data.totalSpots === 'number' ? data.totalSpots : null;
         const occupiedSpots = typeof data.occupiedSpots === 'number' ? data.occupiedSpots : null;
@@ -227,9 +256,9 @@ function submitOrder(event) {
     // that has no real spot behind it.
     reserveSpotIfAvailable()
     .then(result => {
-        if (result === 'full') {
+        if (result === 'full' || result === 'offline') {
             showLoading(false);
-            showScreen('screen-full');
+            showScreen(result === 'full' ? 'screen-full' : 'screen-offline');
             return null;
         }
 

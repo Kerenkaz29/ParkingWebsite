@@ -40,7 +40,7 @@ All the app's logic. No frameworks — plain DOM manipulation and the Firebase J
 `occupiedSpots` is only updated by the Pi once its camera actually sees a car parked — there's a lag between someone placing an order and the Pi noticing. Without a guard, several people could submit orders in that lag window and all "succeed," even though there's only one real spot left.
 
 To close this gap, the website owns a small Firebase node, `/pendingReservations`, shaped as `{ reservationKey: expiresAtEpochMs }`. Each order submission runs a `transaction()` on this single node — Firebase executes transactions atomically, so concurrent submissions are safely serialized (unlike a plain read-then-write, which is why a live count of `/orders` wouldn't be safe to use for this on its own). The transaction:
-1. Prunes any reservation whose `expiresAt` has passed (self-cleaning — no separate cleanup job needed; a no-show frees its spot automatically after `RESERVATION_TTL_MS`, currently 20 minutes).
+1. Prunes any reservation whose `expiresAt` has passed (self-cleaning — no separate cleanup job needed; a no-show frees its spot automatically after `RESERVATION_TTL_MS`, currently 2.5 minutes, matching how long the Pi keeps an unused order valid).
 2. Rejects (aborts, without writing) if `occupiedSpots + activeReservations >= totalSpots`.
 3. Otherwise adds a new reservation and commits, reserving the spot.
 

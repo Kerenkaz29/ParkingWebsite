@@ -42,6 +42,22 @@
         </div>
     </div>
 
+    <!-- Screen 2b: Pi offline (no recent update from the Raspberry Pi) -->
+    <div id="screen-offline" class="screen">
+        <div class="container">
+            <div class="status-icon error">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="7" x2="12" y2="13"/>
+                    <line x1="12" y1="16.5" x2="12" y2="17"/>
+                </svg>
+            </div>
+            <h2>System Unavailable</h2>
+            <p class="message">We can't reach the parking lot right now, so orders are paused. Please try again in a few minutes.</p>
+            <button class="btn-secondary" onclick="goToWelcome()">Back to Home</button>
+        </div>
+    </div>
+
     <!-- Screen 3: Order Form -->
     <div id="screen-order" class="screen">
         <div class="container">
@@ -85,6 +101,7 @@
             <p class="message">Your code is:</p>
             <div id="confirmation-code" class="code-display">0000</div>
             <p class="code-note">Save this code — you'll need it to enter the parking lot</p>
+            <p class="code-note">Your spot is held for 2–2.5 minutes — arrive within that window or it may be released to someone else</p>
             <button class="btn-primary" onclick="goToWelcome()">
                 <span>Back to Home</span>
             </button>
